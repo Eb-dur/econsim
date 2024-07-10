@@ -8,6 +8,11 @@ class Material(Enum):
     WHEAT   = 3
     BREAD   = 4
 
+FOOD = (Material.BREAD,)
+FOOD_VALUES = {
+    Material.BREAD : 10
+}
+
 class Citizen:
     pass
 
@@ -65,6 +70,7 @@ class Proffession:
 
 
 class Citizen:
+    hunger = 0
     current_schematic: Schematic = None
     money: int = 100
     proffession: Proffession = None
@@ -72,6 +78,12 @@ class Citizen:
     def __init__(self, prof: Proffession):
         self.proffession = prof
         self.current_schematic = prof.schematics[0]
+
+    def get_price(self, town : Town, mat : Material) -> float:
+        if town.resources[mat]:
+            return town.resources[mat][0].price
+        else:
+            return None
 
     def can_buy_all(self, town: Town) -> bool:
         total = 0
@@ -81,6 +93,7 @@ class Citizen:
             for i in range(self.current_schematic.input[resource]):
                 total += town.resources[resource][i].price
         return self.money >= total
+    
 
     def buy(self, town: Town, mat: Material) -> None:
             cost = town.buy(mat)
@@ -95,17 +108,46 @@ class Citizen:
 
             material = self.current_schematic.output[0]
             new_price = town.resources[material][0].price + random.randint(-10,10)/10 if town.resources[material] else random.randint(5, 15)
+            if new_price <= 0:
+                new_price = 0.1
 
             town.sell(
                 self.current_schematic.output[0], self.current_schematic.output[1], new_price,self
             )
 
+    def find_food(self, town : Town):
+        cheapest_food = None
+        for food in FOOD:
+            if town.resources[food]:
+                if cheapest_food == None or town.resources[food][0].price < cheapest_food:
+                    cheapest_food = food
+        if cheapest_food:
+            price = self.get_price(town, cheapest_food)
+            if price and price < self.money:
+                self.buy(town, food)
+                self.hunger += FOOD_VALUES[food]
+                if self.hunger > 100:
+                    self.hunger = 0
+    
 
-def input_prices(price_data, town : Town):
+    def do_day(self, town : Town):
+        self.hunger -= 5
+        if self.hunger <= 0:   
+            if self.hunger < 100: 
+                self.find_food(town)
+            self.work(town)
+        
+
+
+def input_prices(price_data, town : Town, citizens):
     for material in town.resources:
         if town.resources[material]:
             price_data[material].append(town.resources[material][0].price)
+    price_data["Citizens"].append(len(citizens))
 
+def generate_random_citizen(proffessions : list[Proffession]):
+    job = random.randint(0, len(proffessions) - 1)
+    return (Citizen(proffessions[job]))
 
 if __name__ == "__main__":
 
@@ -124,45 +166,56 @@ if __name__ == "__main__":
         Material.BREAD: 10.,
     }
 
+    PROFFESSIONS = []
+
     BLACKSMITH = Proffession("Blacksmith")
     BLACKSMITH.add_schematic(Schematic({Material.IRON: 2}, (Material.TOOLS, 1)))
+    PROFFESSIONS.append(BLACKSMITH)
 
     FARMER = Proffession("Farmer")
     FARMER.add_schematic(Schematic({}, (Material.WHEAT, 3)))
+    PROFFESSIONS.append(FARMER)
 
     BAKER = Proffession("Baker")
-    BAKER.add_schematic(Schematic({Material.WHEAT: 3}, (Material.BREAD, 2)))
+    BAKER.add_schematic(Schematic({Material.WHEAT: 3}, (Material.BREAD, 5)))
+    PROFFESSIONS.append(BAKER)
 
     MINER = Proffession("Miner")
     MINER.add_schematic(Schematic({}, (Material.IRON, 3)))
+    PROFFESSIONS.append(MINER)
 
 
     citizens : list[Citizen]= []
-    citizens.append(Citizen(BAKER))
-    citizens.append(Citizen(FARMER))
-    citizens.append(Citizen(FARMER))
-    citizens.append(Citizen(FARMER))
-    citizens.append(Citizen(FARMER))
-    citizens.append(Citizen(FARMER))
-    citizens.append(Citizen(BLACKSMITH))
-    citizens.append(Citizen(MINER))
+    for _ in range(1000):
+        citizens.append(generate_random_citizen(PROFFESSIONS))
+    
 
     days = range(100)
     price_data = {
-        Material.IRON: [],
+        Material.IRON:  [],
         Material.BREAD: [],
         Material.TOOLS: [],
         Material.WHEAT: [],
+        "Citizens":     []
     }
 
 
     for day in days:
-        input_prices(price_data, TOWN)
+        input_prices(price_data, TOWN, citizens)
         for worker in citizens:
-            worker.work(town=TOWN)
+            worker.do_day(town=TOWN)
+            if worker.hunger <= 0:
+                citizens.remove(worker)
+        if day % 10 == 0:
+            citizens.append(generate_random_citizen(PROFFESSIONS))
 
     for material in price_data:
-        matplotlib.pyplot.plot(days[:len(price_data[material])] , price_data[material], label = material.name)
+        if type(material) == str:
+            #matplotlib.pyplot.plot(days[:len(price_data[material])] , price_data[material],label = "Citizens")
+            pass
+        else:
+            matplotlib.pyplot.plot(days[:len(price_data[material])] , price_data[material], label = material.name)
+            
     matplotlib.pyplot.legend()
     matplotlib.pyplot.show()
     
