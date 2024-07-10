@@ -3,16 +3,17 @@ import random
 import heapq
 from enum import Enum
 
+
 class Material(Enum):
-    IRON    = 1
-    TOOLS   = 2
-    WHEAT   = 3
-    BREAD   = 4
+    IRON = 1
+    TOOLS = 2
+    WHEAT = 3
+    BREAD = 4
+
 
 FOOD = (Material.BREAD,)
-FOOD_VALUES = {
-    Material.BREAD : 10
-}
+FOOD_VALUES = {Material.BREAD: 10}
+
 
 class Citizen:
     pass
@@ -25,16 +26,17 @@ class Product:
     def __init__(self, owner: Citizen, price: int):
         self.owner = owner
         self.price = price
-    def __lt__(self, other: 'Product') -> bool:
+
+    def __lt__(self, other: "Product") -> bool:
         return self.price < other.price
 
-    def __le__(self, other: 'Product') -> bool:
+    def __le__(self, other: "Product") -> bool:
         return self.price <= other.price
 
-    def __gt__(self, other: 'Product') -> bool:
+    def __gt__(self, other: "Product") -> bool:
         return self.price > other.price
 
-    def __ge__(self, other: 'Product') -> bool:
+    def __ge__(self, other: "Product") -> bool:
         return self.price >= other.price
 
 
@@ -55,8 +57,8 @@ class Town:
 
     def sell(self, mat: Material, amount: int, price: int, seller: Citizen):
         for _ in range(amount):
-            heapq.heappush(self.resources[mat],Product(seller, price))
-        #self.resources[mat].sort(key=lambda x: x.price)
+            heapq.heappush(self.resources[mat], Product(seller, price))
+        # self.resources[mat].sort(key=lambda x: x.price)
 
 
 class Schematic:
@@ -119,13 +121,16 @@ class Citizen:
                     self.buy(town, material)
 
             material = self.current_schematic.output[0]
-            new_price = (
-                town.resources[material][0].price + random.randint(-10, 10)
-                if town.resources[material]
-                else random.randint(50, 150)
-            )
-            if new_price <= 0:
-                new_price = 0.1
+            resource = town.resources[material]
+            if resource:
+                if resource[0].owner != self:
+                    new_price = resource[0].price + random.randint(-10, 10)
+                else:
+                    new_price = resource[0].price
+                if new_price < 10:
+                    new_price = 10
+            else:
+                new_price = random.randint(50, 150)
 
             town.sell(
                 self.current_schematic.output[0],
@@ -165,7 +170,8 @@ def input_prices(price_data, town: Town, citizens):
             price_data[material].append(town.resources[material][0].price)
         elif price_data[material]:
             price_data[material].append(price_data[material][-1])
-    price_data["Citizens"].append(len(citizens))
+    for proffession in PROFFESSIONS:
+        price_data[proffession.name].append(sum(x.proffession.name == proffession.name for x in citizens))
 
 
 def generate_random_citizen(proffessions: list[Proffession]):
@@ -175,7 +181,7 @@ def generate_random_citizen(proffessions: list[Proffession]):
 
 TOWN = Town("Köping")
 TOWN.resources = {
-    Material.IRON:  [],
+    Material.IRON: [],
     Material.TOOLS: [],
     Material.WHEAT: [],
     Material.BREAD: [],
@@ -184,19 +190,19 @@ TOWN.resources = {
 PROFFESSIONS = []
 
 BLACKSMITH = Proffession("Blacksmith")
-BLACKSMITH.add_schematic(Schematic({Material.IRON: 2}, (Material.TOOLS, 1)))
+BLACKSMITH.add_schematic(Schematic({Material.IRON: 1}, (Material.TOOLS, 1)))
 PROFFESSIONS.append(BLACKSMITH)
 
 FARMER = Proffession("Farmer")
-FARMER.add_schematic(Schematic({Material.TOOLS : 1}, (Material.WHEAT, 3)))
+FARMER.add_schematic(Schematic({Material.TOOLS: 1}, (Material.WHEAT, 1)))
 PROFFESSIONS.append(FARMER)
 
 BAKER = Proffession("Baker")
-BAKER.add_schematic(Schematic({Material.WHEAT: 3}, (Material.BREAD, 5)))
+BAKER.add_schematic(Schematic({Material.WHEAT: 1}, (Material.BREAD, 7)))
 PROFFESSIONS.append(BAKER)
 
 MINER = Proffession("Miner")
-MINER.add_schematic(Schematic({}, (Material.IRON, 2)))
+MINER.add_schematic(Schematic({}, (Material.IRON, 1)))
 PROFFESSIONS.append(MINER)
 
 if __name__ == "__main__":
@@ -211,14 +217,17 @@ if __name__ == "__main__":
         Material.BREAD: [],
         Material.TOOLS: [],
         Material.WHEAT: [],
-        "Citizens": [],
+        "Blacksmith": [],
+        "Farmer" : [],
+        "Baker" : [],
+        "Miner" : [],
     }
 
     # Simulation
     for day in days:
         input_prices(price_data, TOWN, citizens)
         for _ in range(len(citizens)):
-            worker = citizens[random.randint(0,len(citizens) - 1)]
+            worker = citizens[random.randint(0, len(citizens) - 1)]
             worker.do_day(town=TOWN)
             citizens.remove(worker)
             if worker.hunger > 0:
@@ -228,10 +237,15 @@ if __name__ == "__main__":
         if day % 100 == 0:
             for _ in range(10):
                 citizens.append(generate_random_citizen(PROFFESSIONS))
-    #--------------------------------------------------------------------#
+    # --------------------------------------------------------------------#
     for material in price_data:
         if type(material) == str:
-            matplotlib.pyplot.plot(days[:len(price_data[material])] , price_data[material],label = "Citizens")
+            matplotlib.pyplot.plot(
+                days[: len(price_data[material])],
+                price_data[material],
+                label=material,
+                linestyle = "dashdot"
+            )
             pass
         else:
             matplotlib.pyplot.plot(
